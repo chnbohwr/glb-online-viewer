@@ -1,57 +1,104 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import Stats from 'three/examples/jsm/libs/stats.module';
-import './cssreset.css';
+
+import Stats from 'three/examples/jsm/libs/stats.module.js';
+
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+
+let mixer;
+
+const clock = new THREE.Clock();
+const container = document.getElementById('app');
+
+const stats = new Stats();
+container.appendChild(stats.dom);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x35353);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 100);
+camera.position.set(5, 2, 8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.5, 0);
+controls.update();
+controls.enablePan = false;
+controls.enableDamping = true;
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('jsm/libs/draco/gltf/');
 
 const loader = new GLTFLoader();
-const renderer = new THREE.WebGLRenderer();
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(800, 700, false);
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x444444);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50000);
-camera.position.z = 25;
+loader.setDRACOLoader(dracoLoader);
 
-const light = new THREE.AmbientLight(0xffffff);
-var light2 = new THREE.DirectionalLight(0xffffff, 1);
-light2.position.set(500, 300, 500);
-scene.add(light);
-scene.add(light2);
+renderer.render(scene, camera);
 
-const control = new OrbitControls(camera, renderer.domElement);
-// control.enableZoom = false;
-
-
-// const stat = new Stats();
-// console.log(stat);
-
-var appEle = document.getElementById('app');
-console.log(appEle)
-renderer.setSize(appEle.clientWidth, appEle.clientHeight);
-const app = document.getElementById('app');
-app.appendChild(renderer.domElement);
-// app.appendChild(stat.domElement);
-const render = () => {
-  // group.rotateX(0.001);
-  // group.rotateY(0.001);
-  // group.rotateZ(0.001);
-  renderer.render(scene, camera);
-  // stat.update();
-  // control.update();
-  requestAnimationFrame(render);
+window.onresize = function () {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 };
 
-render();
 
-window.URL = window.URL || window.webkitURL || window.mozURL;
+function animate() {
+  requestAnimationFrame(animate);
+  // const delta = clock.getDelta();
+  // mixer.update(delta);
+  controls.update();
+  stats.update();
+  renderer.render(scene, camera);
+}
+
+const loadedGLTF = (gltf)=>{
+  window.VIEWERJSON = gltf;
+  const model = gltf.scene || gltf.scenes[0];
+
+  model.position.set(1, 1, 0);
+  model.scale.set(0.01, 0.01, 0.01);
+
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3()).length();
+  const center = box.getCenter(new THREE.Vector3());
+
+  model.position.x += (model.position.x - center.x);
+  model.position.y += (model.position.y - center.y);
+  model.position.z += (model.position.z - center.z);
+
+  camera.position.copy(center);
+  camera.position.x += size / 2.0;
+  camera.position.y += size / 5.0;
+  camera.position.z += size / 2.0;
+  camera.lookAt(center);
+  camera.near = size / 100;
+  camera.far = size * 100;
+
+  scene.add(model);
+  controls.reset();
+
+  // animation
+  // mixer = new THREE.AnimationMixer( model );
+	// mixer.clipAction( gltf.animations[ 0 ] ).play();
+
+  animate();
+}
+
 var fileEle = document.getElementById('glbfileEle');
 fileEle.onchange = (e) => {
+  const WURL = window.URL || window.webkitURL || window.mozURL;
   const file = e.target.files[0];
-  var url = URL.createObjectURL(file);
+  var url = WURL.createObjectURL(file);
   console.log(url);
-  loader.load(url,(model)=>{
-    console.log(model);
-    scene.add(model.scene);
-  })
+  loader.load(url, loadedGLTF);
 };
